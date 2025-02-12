@@ -2,9 +2,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Snake Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            overscroll-behavior: none;
+        }
+        #gameCanvas {
+            touch-action: none;
+        }
+        .touch-controls {
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+    </style>
 </head>
 <body class="flex items-center justify-center min-h-screen bg-gray-900 p-4">
     <div class="text-center relative w-full max-w-lg">
@@ -97,8 +117,8 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         let baseWidth = Math.min(400, window.innerWidth - 40);
-        let baseHeight = Math.min(400, window.innerWidth - 40);
-        const box = Math.floor(baseWidth / 20);
+        let baseHeight = Math.min(400, window.innerHeight - 200); // Adjust height based on viewport
+        const box = Math.floor(Math.min(baseWidth, baseHeight) / 20); // Make box size responsive
         
         // Game state
         let snake = [];
@@ -238,10 +258,15 @@
         }
 
         function expandBoard() {
-            baseWidth += box;
-            baseHeight += box;
-            canvas.width = baseWidth;
-            canvas.height = baseHeight;
+            const maxWidth = Math.min(800, window.innerWidth - 40);
+            const maxHeight = Math.min(800, window.innerHeight - 200);
+            
+            if (baseWidth < maxWidth && baseHeight < maxHeight) {
+                baseWidth += box;
+                baseHeight += box;
+                canvas.width = baseWidth;
+                canvas.height = baseHeight;
+            }
         }
 
         function generateFood() {
@@ -262,6 +287,8 @@
             document.getElementById("gameScreen").classList.remove("hidden");
             
             // Reset game state
+            baseWidth = Math.min(400, window.innerWidth - 40);
+            baseHeight = Math.min(400, window.innerHeight - 200);
             canvas.width = baseWidth;
             canvas.height = baseHeight;
             snake = [{ x: 10 * box, y: 10 * box }];
@@ -609,6 +636,28 @@
             isSlowMotion = false;
             gameSpeed = originalGameSpeed;
         }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            baseWidth = Math.min(400, window.innerWidth - 40);
+            baseHeight = Math.min(400, window.innerHeight - 200);
+            const newBox = Math.floor(Math.min(baseWidth, baseHeight) / 20);
+            
+            // Only update if the size actually changed
+            if (newBox !== box) {
+                canvas.width = baseWidth;
+                canvas.height = baseHeight;
+                // Adjust snake and food positions
+                snake = snake.map(segment => ({
+                    x: Math.floor(segment.x * newBox / box),
+                    y: Math.floor(segment.y * newBox / box)
+                }));
+                food = {
+                    x: Math.floor(food.x * newBox / box),
+                    y: Math.floor(food.y * newBox / box)
+                };
+            }
+        });
     </script>
 </body>
 </html>
