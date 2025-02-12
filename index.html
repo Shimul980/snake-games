@@ -618,8 +618,11 @@
         });
 
         // Add touch controls for the entire game area when in touch-only mode
-        document.getElementById("gameScreen").addEventListener('touchstart', (e) => {
+        const gameScreen = document.getElementById("gameScreen");
+        
+        gameScreen.addEventListener('touchstart', (e) => {
             if (controlType === "touch") {
+                e.preventDefault();
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
                 lastTouchX = touchStartX;
@@ -627,7 +630,7 @@
             }
         });
 
-        document.getElementById("gameScreen").addEventListener('touchmove', (e) => {
+        gameScreen.addEventListener('touchmove', (e) => {
             if (controlType === "touch" && !isPaused) {
                 e.preventDefault();
                 if (!lastTouchX || !lastTouchY) return;
@@ -635,9 +638,10 @@
                 const currentX = e.touches[0].clientX;
                 const currentY = e.touches[0].clientY;
                 
-                const deltaX = currentX - lastTouchX;
-                const deltaY = currentY - lastTouchY;
+                const deltaX = currentX - touchStartX;
+                const deltaY = currentY - touchStartY;
                 
+                // Determine direction based on the larger movement
                 if (Math.abs(deltaX) > touchThreshold || Math.abs(deltaY) > touchThreshold) {
                     if (Math.abs(deltaX) > Math.abs(deltaY)) {
                         tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
@@ -645,13 +649,14 @@
                         tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
                     }
                     
-                    lastTouchX = currentX;
-                    lastTouchY = currentY;
+                    // Reset start position after direction change
+                    touchStartX = currentX;
+                    touchStartY = currentY;
                 }
             }
         }, { passive: false });
 
-        document.getElementById("gameScreen").addEventListener('touchend', () => {
+        gameScreen.addEventListener('touchend', () => {
             if (controlType === "touch") {
                 touchStartX = null;
                 touchStartY = null;
