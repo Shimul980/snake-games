@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen bg-gray-900 p-4">
+    <div class="text-center relative w-full max-w-lg">
+        <h1 class="text-white text-3xl mb-4">Snake Game</h1>
+        
+        <!-- Score Board -->
+        <div class="bg-gray-800 p-3 rounded-lg text-white mb-4 flex justify-center space-x-8">
+            <div id="currentScore" class="text-xl">Score: 0</div>
+            <div id="highScore" class="text-xl">High Score: 0</div>
+        </div>
+        
+        <!-- Menu Screen -->
+        <div id="menuScreen" class="text-white space-y-4">
+            <button id="startBtn" class="bg-green-500 w-48 px-6 py-4 rounded-xl hover:bg-green-600 text-xl font-semibold transition-colors">Start Game</button>
+            <div>
+                <button id="settingsBtn" class="bg-blue-500 w-48 px-6 py-4 rounded-xl hover:bg-blue-600 text-xl font-semibold transition-colors">Settings</button>
+            </div>
+        </div>
+        
+        <!-- Settings Screen -->
+        <div id="settingsScreen" class="text-white hidden">
+            <div class="mb-8">
+                <h2 class="text-xl mb-4">Difficulty Level</h2>
+                <div class="space-x-2">
+                    <button data-speed="75" class="level-btn bg-red-500 px-6 py-2 rounded hover:bg-red-600">Hard</button>
+                    <button data-speed="150" class="level-btn bg-yellow-500 px-6 py-2 rounded hover:bg-yellow-600">Medium</button>
+                    <button data-speed="225" class="level-btn bg-green-500 px-6 py-2 rounded hover:bg-green-600">Easy</button>
+                </div>
+            </div>
+            
+            <div class="mb-8">
+                <h2 class="text-xl mb-4">Control Type</h2>
+                <div class="space-y-2">
+                    <div class="flex justify-center space-x-2">
+                        <button id="joystickBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="joystick">Joystick</button>
+                        <button id="arrowsBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="arrows">Arrows</button>
+                        <button id="touchBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="touch">Touch Only</button>
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        <p id="controlDescription" class="mt-2"></p>
+                    </div>
+                </div>
+            </div>
+
+            <button id="settingsBackBtn" class="bg-gray-500 px-6 py-2 rounded hover:bg-gray-600">Back</button>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="hidden">
+            <div class="flex justify-between mb-2">
+                <button id="pauseBtn" class="bg-yellow-500 px-4 py-2 rounded hover:bg-yellow-600">Pause</button>
+                <button id="exitBtn" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600">Exit Game</button>
+            </div>
+            <canvas id="gameCanvas" class="bg-gray-800 rounded-lg mx-auto"></canvas>
+            
+            <!-- Mobile Controls -->
+            <div id="mobileControls" class="mt-4 md:hidden">
+                <!-- Joystick Control -->
+                <div id="joystickControl" class="hidden">
+                    <div id="controlPad" class="w-[133px] h-[133px] rounded-full bg-gray-700 relative mx-auto touch-none">
+                        <div id="joystick" class="w-10 h-10 rounded-full bg-gray-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform duration-100">
+                            <div class="w-full h-full rounded-full bg-gray-400 opacity-50"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Arrow Controls -->
+                <div id="arrowControls" class="hidden">
+                    <div class="grid grid-cols-3 gap-4 max-w-[200px] mx-auto">
+                        <div></div>
+                        <button class="arrow-btn bg-gray-700 h-16 rounded-xl" data-direction="UP">↑</button>
+                        <div></div>
+                        <button class="arrow-btn bg-gray-700 h-16 rounded-xl" data-direction="LEFT">←</button>
+                        <div class="bg-gray-800 h-16 rounded-xl opacity-20"></div>
+                        <button class="arrow-btn bg-gray-700 h-16 rounded-xl" data-direction="RIGHT">→</button>
+                        <div></div>
+                        <button class="arrow-btn bg-gray-700 h-16 rounded-xl" data-direction="DOWN">↓</button>
+                        <div></div>
+                    </div>
+                </div>
+
+                <!-- Touch Only Control -->
+                <div id="touchControl" class="hidden">
+                    <div class="text-center text-gray-400 mb-2">
+                        Swipe anywhere on screen to control
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        let baseWidth = Math.min(400, window.innerWidth - 40);
+        let baseHeight = Math.min(400, window.innerWidth - 40);
+        const box = Math.floor(baseWidth / 20);
+        
+        // Game state
+        let snake = [];
+        let food = {};
+        let direction = "RIGHT";
+        let score = 0;
+        let highScore = localStorage.getItem("snakeHighScore") || 0;
+        let foodEaten = 0;
+        let isBonusFood = false;
+        let gameSpeed = 150;
+        let game = null;
+        let isPaused = false;
+        let lastBoardExpansion = 0;
+        let touchStartX = null;
+        let touchStartY = null;
+        let lastTouchX = null;
+        let lastTouchY = null;
+        let touchThreshold = 30;
+        let isSlowMotion = false;
+        let originalGameSpeed = 150;
+        let joystickActive = false;
+        let joystickStartX = 0;
+        let joystickStartY = 0;
+        let currentJoystickX = 0;
+        let currentJoystickY = 0;
+        let controlType = localStorage.getItem("snakeControlType") || "joystick";
+        let selectedSpeed = parseInt(localStorage.getItem("snakeGameSpeed")) || 150;
+        
+        // Remove old level screen code
+        document.getElementById("levelScreen")?.remove();
+
+        // Style mobile control buttons
+        document.querySelectorAll('.control-btn').forEach(btn => {
+            btn.classList.add(
+                'bg-gray-700',
+                'text-white',
+                'rounded-lg',
+                'p-4',
+                'text-2xl',
+                'active:bg-gray-600',
+                'select-none'
+            );
+        });
+
+        // Style arrow buttons
+        document.querySelectorAll('.arrow-btn').forEach(btn => {
+            btn.classList.add(
+                'text-white',
+                'text-2xl',
+                'active:bg-gray-600',
+                'select-none',
+                'transition-colors',
+                'hover:bg-gray-600'
+            );
+        });
+
+        // Update high score display
+        document.getElementById("highScore").textContent = "High Score: " + highScore;
+
+        // Mobile touch controls
+        document.querySelectorAll('.control-btn').forEach(btn => {
+            let touchTimer = null;
+            
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const handleDirection = () => {
+                    if (!isPaused) {
+                        const newDirection = e.target.dataset.direction;
+                        tryChangeDirection(newDirection);
+                    }
+                };
+                handleDirection();
+                touchTimer = setInterval(handleDirection, 100);
+            });
+
+            btn.addEventListener('touchend', () => {
+                if (touchTimer) {
+                    clearInterval(touchTimer);
+                }
+            });
+        });
+
+        // Arrow button controls
+        document.querySelectorAll('.arrow-btn').forEach(btn => {
+            let touchTimer = null;
+            
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const handleDirection = () => {
+                    if (!isPaused) {
+                        const newDirection = e.target.dataset.direction;
+                        tryChangeDirection(newDirection);
+                    }
+                };
+                handleDirection();
+                touchTimer = setInterval(handleDirection, 100);
+            });
+
+            btn.addEventListener('touchend', () => {
+                if (touchTimer) {
+                    clearInterval(touchTimer);
+                }
+            });
+        });
+
+        function tryChangeDirection(newDirection) {
+            if (
+                (newDirection === "UP" && direction !== "DOWN") ||
+                (newDirection === "DOWN" && direction !== "UP") ||
+                (newDirection === "LEFT" && direction !== "RIGHT") ||
+                (newDirection === "RIGHT" && direction !== "LEFT")
+            ) {
+                direction = newDirection;
+            }
+        }
+
+        // Swipe controls
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            lastTouchX = touchStartX;
+            lastTouchY = touchStartY;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling while playing
+            if (isPaused || !lastTouchX || !lastTouchY) return;
+
+            const currentX = e.touches[0].clientX;
+            const currentY = e.touches[0].clientY;
+            
+            const deltaX = currentX - lastTouchX;
+            const deltaY = currentY - lastTouchY;
+            
+            if (Math.abs(deltaX) > touchThreshold || Math.abs(deltaY) > touchThreshold) {
+                // Determine primary direction
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
+                } else {
+                    tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
+                }
+                
+                // Update last touch position
+                lastTouchX = currentX;
+                lastTouchY = currentY;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => {
+            touchStartX = null;
+            touchStartY = null;
+            lastTouchX = null;
+            lastTouchY = null;
+        });
+
+        // Add touch event listener to document for auto-pause
+        document.addEventListener('touchstart', (e) => {
+            if (!isPaused && game) {
+                // Check if touch is outside canvas and game controls
+                const touch = e.touches[0];
+                const canvasRect = canvas.getBoundingClientRect();
+                const controlsRect = document.getElementById('mobileControls').getBoundingClientRect();
+                
+                const isOutsideCanvas = touch.clientX < canvasRect.left || 
+                                      touch.clientX > canvasRect.right ||
+                                      touch.clientY < canvasRect.top || 
+                                      touch.clientY > canvasRect.bottom;
+                                      
+                const isOutsideControls = touch.clientX < controlsRect.left || 
+                                        touch.clientX > controlsRect.right ||
+                                        touch.clientY < controlsRect.top || 
+                                        touch.clientY > controlsRect.bottom;
+                
+                if (isOutsideCanvas && isOutsideControls) {
+                    togglePause();
+                }
+            }
+        });
+
+        function startSlowMotion() {
+            if (!isSlowMotion) {
+                isSlowMotion = true;
+                clearInterval(game);
+                gameSpeed = gameSpeed * 3; // Slow down 3x
+                game = setInterval(draw, gameSpeed);
+                
+                // Flash effect
+                let flashCount = 0;
+                const maxFlashes = 3;
+                const flashInterval = setInterval(() => {
+                    if (flashCount >= maxFlashes) {
+                        clearInterval(flashInterval);
+                        endGame();
+                        return;
+                    }
+                    
+                    document.getElementById('gameCanvas').classList.add('opacity-50');
+                    setTimeout(() => {
+                        document.getElementById('gameCanvas').classList.remove('opacity-50');
+                    }, 200);
+                    
+                    flashCount++;
+                }, 400);
+            }
+        }
+
+        function endGame() {
+            clearInterval(game);
+            alert("Game Over! Score: " + score);
+            document.getElementById("gameScreen").classList.add("hidden");
+            document.getElementById("menuScreen").classList.remove("hidden");
+            isSlowMotion = false;
+            gameSpeed = originalGameSpeed;
+        }
+
+        // Menu handling
+        document.getElementById("startBtn").addEventListener("click", startGame);
+        document.getElementById("exitBtn").addEventListener("click", () => {
+            clearInterval(game);
+            document.getElementById("gameScreen").classList.add("hidden");
+            document.getElementById("menuScreen").classList.remove("hidden");
+        });
+
+        document.getElementById("pauseBtn").addEventListener("click", togglePause);
+
+        function togglePause() {
+            if (isPaused) {
+                game = setInterval(draw, gameSpeed);
+                document.getElementById("pauseBtn").textContent = "Pause";
+            } else {
+                clearInterval(game);
+                document.getElementById("pauseBtn").textContent = "Resume";
+            }
+            isPaused = !isPaused;
+        }
+
+        function expandBoard() {
+            baseWidth += box;
+            baseHeight += box;
+            canvas.width = baseWidth;
+            canvas.height = baseHeight;
+        }
+
+        function generateFood() {
+            let newFood;
+            do {
+                newFood = {
+                    x: Math.floor(Math.random() * (canvas.width / box)) * box,
+                    y: Math.floor(Math.random() * (canvas.height / box)) * box
+                };
+            } while (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y));
+            return newFood;
+        }
+
+        function startGame() {
+            // Hide menu and show game
+            document.getElementById("menuScreen").classList.add("hidden");
+            document.getElementById("settingsScreen").classList.add("hidden");
+            document.getElementById("gameScreen").classList.remove("hidden");
+            
+            // Reset game state
+            canvas.width = baseWidth;
+            canvas.height = baseHeight;
+            snake = [{ x: 10 * box, y: 10 * box }];
+            direction = "RIGHT";
+            score = 0;
+            document.getElementById("currentScore").textContent = "Score: " + score;
+            foodEaten = 0;
+            isBonusFood = false;
+            lastBoardExpansion = 0;
+            food = generateFood();
+            isSlowMotion = false;
+            gameSpeed = selectedSpeed;
+            
+            if (game) clearInterval(game);
+            game = setInterval(draw, gameSpeed);
+        }
+        
+        document.addEventListener("keydown", changeDirection);
+        function changeDirection(event) {
+            if (isPaused) return;
+            if (event.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
+            if (event.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
+            if (event.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
+            if (event.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
+        }
+
+        function checkFoodCollision(x, y) {
+            if (isBonusFood) {
+                // For bonus food, check collision with larger area
+                return x >= food.x && x <= food.x + box * 1.5 &&
+                       y >= food.y && y <= food.y + box * 1.5;
+            }
+            return x === food.x && y === food.y;
+        }
+        
+        function draw() {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw food
+            ctx.fillStyle = isBonusFood ? "gold" : "red";
+            const foodSize = isBonusFood ? box * 1.5 : box;
+            ctx.fillRect(food.x, food.y, foodSize, foodSize);
+            
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = i === 0 ? "lime" : "green";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+            }
+            
+            let newX = snake[0].x;
+            let newY = snake[0].y;
+            if (direction === "UP") newY -= box;
+            if (direction === "DOWN") newY += box;
+            if (direction === "LEFT") newX -= box;
+            if (direction === "RIGHT") newX += box;
+            
+            if (checkFoodCollision(newX, newY)) {
+                foodEaten++;
+                score += isBonusFood ? 50 : 10;
+                document.getElementById("currentScore").textContent = "Score: " + score;
+                
+                // Update high score
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem("snakeHighScore", highScore);
+                    document.getElementById("highScore").textContent = "High Score: " + highScore;
+                }
+
+                // Check for board expansion
+                if (score >= lastBoardExpansion + 500) {
+                    expandBoard();
+                    lastBoardExpansion = score;
+                }
+                
+                // Check if it's time for bonus food
+                isBonusFood = foodEaten % 5 === 0;
+                food = generateFood();
+            } else {
+                snake.pop();
+            }
+            
+            let newHead = { x: newX, y: newY };
+            if (newX < 0 || newY < 0 || newX >= canvas.width || newY >= canvas.height || collision(newHead, snake)) {
+                if (!isSlowMotion) {
+                    startSlowMotion();
+                    return;
+                }
+            }
+            
+            snake.unshift(newHead);
+        }
+        
+        function collision(head, array) {
+            return array.some(segment => segment.x === head.x && segment.y === head.y);
+        }
+
+        const joystick = document.getElementById('joystick');
+        const controlPad = document.getElementById('controlPad');
+        const maxJoystickMove = 33; // Maximum pixels the joystick can move (reduced from 50)
+
+        // Joystick controls
+        controlPad.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = controlPad.getBoundingClientRect();
+            joystickStartX = touch.clientX - rect.left;
+            joystickStartY = touch.clientY - rect.top;
+            currentJoystickX = joystickStartX;
+            currentJoystickY = joystickStartY;
+            joystickActive = true;
+
+            // Center the joystick at touch position
+            const centerX = Math.min(Math.max(joystickStartX, 32), rect.width - 32);
+            const centerY = Math.min(Math.max(joystickStartY, 32), rect.height - 32);
+            joystick.style.left = `${centerX}px`;
+            joystick.style.top = `${centerY}px`;
+            joystick.style.transform = 'translate(-50%, -50%)';
+        });
+
+        controlPad.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!joystickActive) return;
+
+            const touch = e.touches[0];
+            const rect = controlPad.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+
+            // Calculate distance from start
+            const deltaX = x - joystickStartX;
+            const deltaY = y - joystickStartY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const angle = Math.atan2(deltaY, deltaX);
+
+            // Limit joystick movement
+            const moveDistance = Math.min(distance, maxJoystickMove);
+            currentJoystickX = joystickStartX + Math.cos(angle) * moveDistance;
+            currentJoystickY = joystickStartY + Math.sin(angle) * moveDistance;
+
+            // Move joystick
+            joystick.style.left = `${currentJoystickX}px`;
+            joystick.style.top = `${currentJoystickY}px`;
+
+            // Determine direction based on angle
+            const degrees = angle * 180 / Math.PI;
+            if (distance > 10) { // Add a small threshold to prevent tiny movements
+                if (degrees > -135 && degrees <= -45) {
+                    tryChangeDirection("UP");
+                } else if (degrees > -45 && degrees <= 45) {
+                    tryChangeDirection("RIGHT");
+                } else if (degrees > 45 && degrees <= 135) {
+                    tryChangeDirection("DOWN");
+                } else {
+                    tryChangeDirection("LEFT");
+                }
+            }
+        });
+
+        controlPad.addEventListener('touchend', () => {
+            joystickActive = false;
+            // Reset joystick position with animation
+            joystick.style.left = '50%';
+            joystick.style.top = '50%';
+            joystick.style.transform = 'translate(-50%, -50%)';
+        });
+
+        // Initialize control type
+        function updateControlType(type) {
+            controlType = type;
+            localStorage.setItem("snakeControlType", type);
+            
+            const joystickControl = document.getElementById("joystickControl");
+            const arrowControls = document.getElementById("arrowControls");
+            const touchControl = document.getElementById("touchControl");
+            
+            // Hide all controls first
+            joystickControl.classList.add("hidden");
+            arrowControls.classList.add("hidden");
+            touchControl.classList.add("hidden");
+            
+            // Remove highlight from all buttons
+            document.querySelectorAll('.control-type-btn').forEach(btn => {
+                btn.classList.remove("ring-2", "ring-white");
+            });
+            
+            // Update description
+            const description = document.getElementById("controlDescription");
+            
+            switch(type) {
+                case "joystick":
+                    joystickControl.classList.remove("hidden");
+                    document.getElementById("joystickBtn").classList.add("ring-2", "ring-white");
+                    description.textContent = "Use the joystick pad to control snake direction";
+                    break;
+                case "arrows":
+                    arrowControls.classList.remove("hidden");
+                    document.getElementById("arrowsBtn").classList.add("ring-2", "ring-white");
+                    description.textContent = "Use arrow buttons to control snake direction";
+                    break;
+                case "touch":
+                    touchControl.classList.remove("hidden");
+                    document.getElementById("touchBtn").classList.add("ring-2", "ring-white");
+                    description.textContent = "Swipe anywhere on the screen to change direction";
+                    break;
+            }
+        }
+
+        // Update difficulty level
+        function updateDifficulty(speed) {
+            selectedSpeed = parseInt(speed);
+            localStorage.setItem("snakeGameSpeed", speed);
+            gameSpeed = speed;
+            originalGameSpeed = speed;
+
+            // Update visual feedback
+            document.querySelectorAll('.level-btn').forEach(btn => {
+                if (parseInt(btn.dataset.speed) === selectedSpeed) {
+                    btn.classList.add('ring-2', 'ring-white');
+                } else {
+                    btn.classList.remove('ring-2', 'ring-white');
+                }
+            });
+        }
+
+        // Initialize settings on load
+        updateControlType(controlType);
+        updateDifficulty(selectedSpeed);
+
+        // Settings button handlers
+        document.getElementById("settingsBtn").addEventListener("click", () => {
+            document.getElementById("menuScreen").classList.add("hidden");
+            document.getElementById("settingsScreen").classList.remove("hidden");
+        });
+
+        document.getElementById("settingsBackBtn").addEventListener("click", () => {
+            document.getElementById("settingsScreen").classList.add("hidden");
+            document.getElementById("menuScreen").classList.remove("hidden");
+        });
+
+        // Control type button handlers
+        document.querySelectorAll(".control-type-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                updateControlType(e.target.dataset.type);
+            });
+        });
+
+        // Difficulty level button handlers
+        document.querySelectorAll(".level-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                updateDifficulty(e.target.dataset.speed);
+            });
+        });
+
+        // Add touch controls for the entire game area when in touch-only mode
+        document.getElementById("gameScreen").addEventListener('touchstart', (e) => {
+            if (controlType === "touch") {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                lastTouchX = touchStartX;
+                lastTouchY = touchStartY;
+            }
+        });
+
+        document.getElementById("gameScreen").addEventListener('touchmove', (e) => {
+            if (controlType === "touch" && !isPaused) {
+                e.preventDefault();
+                if (!lastTouchX || !lastTouchY) return;
+
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                
+                const deltaX = currentX - lastTouchX;
+                const deltaY = currentY - lastTouchY;
+                
+                if (Math.abs(deltaX) > touchThreshold || Math.abs(deltaY) > touchThreshold) {
+                    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                        tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
+                    } else {
+                        tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
+                    }
+                    
+                    lastTouchX = currentX;
+                    lastTouchY = currentY;
+                }
+            }
+        }, { passive: false });
+
+        document.getElementById("gameScreen").addEventListener('touchend', () => {
+            if (controlType === "touch") {
+                touchStartX = null;
+                touchStartY = null;
+                lastTouchX = null;
+                lastTouchY = null;
+            }
+        });
+    </script>
+</body>
+</html>
