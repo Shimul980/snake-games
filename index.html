@@ -89,8 +89,10 @@
 
                 <!-- Touch Only Control -->
                 <div id="touchControl" class="hidden">
-                    <div class="text-center text-gray-400 mb-2">
-                        Swipe anywhere on screen to control
+                    <div id="touchArea" class="w-full h-full absolute top-0 left-0 z-10">
+                        <div class="text-center text-gray-400 mb-2">
+                            Swipe anywhere on screen to control
+                        </div>
                     </div>
                 </div>
             </div>
@@ -538,6 +540,7 @@
             const joystickControl = document.getElementById("joystickControl");
             const arrowControls = document.getElementById("arrowControls");
             const touchControl = document.getElementById("touchControl");
+            const touchArea = document.getElementById("touchArea");
             
             // Hide all controls first
             joystickControl.classList.add("hidden");
@@ -567,8 +570,50 @@
                     touchControl.classList.remove("hidden");
                     document.getElementById("touchBtn").classList.add("ring-2", "ring-white");
                     description.textContent = "Swipe anywhere on the screen to change direction";
+                    setupTouchControls();
                     break;
             }
+        }
+
+        function setupTouchControls() {
+            const touchArea = document.getElementById("touchArea");
+            let touchStartX = null;
+            let touchStartY = null;
+
+            touchArea.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            });
+
+            touchArea.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!touchStartX || !touchStartY || isPaused) return;
+
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                
+                const deltaX = currentX - touchStartX;
+                const deltaY = currentY - touchStartY;
+                
+                const minSwipeDistance = 30; // Minimum distance for a swipe
+
+                if (Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance) {
+                    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                        tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
+                    } else {
+                        tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
+                    }
+                    // Reset start position
+                    touchStartX = currentX;
+                    touchStartY = currentY;
+                }
+            }, { passive: false });
+
+            touchArea.addEventListener('touchend', () => {
+                touchStartX = null;
+                touchStartY = null;
+            });
         }
 
         // Update difficulty level
@@ -620,50 +665,7 @@
         // Add touch controls for the entire game area when in touch-only mode
         const gameScreen = document.getElementById("gameScreen");
         
-        gameScreen.addEventListener('touchstart', (e) => {
-            if (controlType === "touch") {
-                e.preventDefault();
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-                lastTouchX = touchStartX;
-                lastTouchY = touchStartY;
-            }
-        });
-
-        gameScreen.addEventListener('touchmove', (e) => {
-            if (controlType === "touch" && !isPaused) {
-                e.preventDefault();
-                if (!lastTouchX || !lastTouchY) return;
-
-                const currentX = e.touches[0].clientX;
-                const currentY = e.touches[0].clientY;
-                
-                const deltaX = currentX - touchStartX;
-                const deltaY = currentY - touchStartY;
-                
-                // Determine direction based on the larger movement
-                if (Math.abs(deltaX) > touchThreshold || Math.abs(deltaY) > touchThreshold) {
-                    if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                        tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
-                    } else {
-                        tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
-                    }
-                    
-                    // Reset start position after direction change
-                    touchStartX = currentX;
-                    touchStartY = currentY;
-                }
-            }
-        }, { passive: false });
-
-        gameScreen.addEventListener('touchend', () => {
-            if (controlType === "touch") {
-                touchStartX = null;
-                touchStartY = null;
-                lastTouchX = null;
-                lastTouchY = null;
-            }
-        });
+        // Removed old touch event listeners
     </script>
 </body>
 </html>
