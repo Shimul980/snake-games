@@ -39,10 +39,11 @@
             <div class="mb-8">
                 <h2 class="text-xl mb-4">Control Type</h2>
                 <div class="space-y-2">
-                    <div class="flex justify-center space-x-2">
+                    <div class="flex justify-center flex-wrap gap-2">
                         <button id="joystickBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="joystick">Joystick</button>
                         <button id="arrowsBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="arrows">Arrows</button>
-                        <button id="touchBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="touch">Touch Only</button>
+                        <button id="keyboardBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="keyboard">Keyboard</button>
+                        <button id="touchBtn" class="control-type-btn bg-purple-500 px-6 py-2 rounded hover:bg-purple-600" data-type="touch">Touch</button>
                     </div>
                     <div class="text-sm text-gray-400">
                         <p id="controlDescription" class="mt-2"></p>
@@ -59,7 +60,9 @@
                 <button id="pauseBtn" class="bg-yellow-500 px-4 py-2 rounded hover:bg-yellow-600">Pause</button>
                 <button id="exitBtn" class="bg-red-500 px-4 py-2 rounded hover:bg-red-600">Exit Game</button>
             </div>
-            <canvas id="gameCanvas" class="bg-gray-800 rounded-lg mx-auto"></canvas>
+            <div id="gameArea" class="relative">
+                <canvas id="gameCanvas" class="bg-gray-800 rounded-lg mx-auto"></canvas>
+            </div>
             
             <!-- Mobile Controls -->
             <div id="mobileControls" class="mt-4 md:hidden">
@@ -86,15 +89,6 @@
                         <div></div>
                     </div>
                 </div>
-
-                <!-- Touch Only Control -->
-                <div id="touchControl" class="hidden">
-                    <div id="touchArea" class="w-full h-full absolute top-0 left-0 z-10">
-                        <div class="text-center text-gray-400 mb-2">
-                            Swipe anywhere on screen to control
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -118,11 +112,6 @@
         let game = null;
         let isPaused = false;
         let lastBoardExpansion = 0;
-        let touchStartX = null;
-        let touchStartY = null;
-        let lastTouchX = null;
-        let lastTouchY = null;
-        let touchThreshold = 30;
         let isSlowMotion = false;
         let originalGameSpeed = 150;
         let joystickActive = false;
@@ -130,8 +119,12 @@
         let joystickStartY = 0;
         let currentJoystickX = 0;
         let currentJoystickY = 0;
-        let controlType = localStorage.getItem("snakeControlType") || "joystick";
+        let controlType = "joystick"; // Always default to joystick
         let selectedSpeed = parseInt(localStorage.getItem("snakeGameSpeed")) || 150;
+        let touchStartX = null;
+        let touchStartY = null;
+        let touchThreshold = 30;
+        let isGameOver = false;
         
         // Remove old level screen code
         document.getElementById("levelScreen")?.remove();
@@ -171,7 +164,7 @@
             btn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 const handleDirection = () => {
-                    if (!isPaused) {
+                    if (!isPaused && !isGameOver) {
                         const newDirection = e.target.dataset.direction;
                         tryChangeDirection(newDirection);
                     }
@@ -194,7 +187,7 @@
             btn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 const handleDirection = () => {
-                    if (!isPaused) {
+                    if (!isPaused && !isGameOver) {
                         const newDirection = e.target.dataset.direction;
                         tryChangeDirection(newDirection);
                     }
@@ -211,6 +204,8 @@
         });
 
         function tryChangeDirection(newDirection) {
+            if (isPaused || isGameOver) return;
+            
             if (
                 (newDirection === "UP" && direction !== "DOWN") ||
                 (newDirection === "DOWN" && direction !== "UP") ||
@@ -219,105 +214,6 @@
             ) {
                 direction = newDirection;
             }
-        }
-
-        // Swipe controls
-        canvas.addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-            lastTouchX = touchStartX;
-            lastTouchY = touchStartY;
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault(); // Prevent scrolling while playing
-            if (isPaused || !lastTouchX || !lastTouchY) return;
-
-            const currentX = e.touches[0].clientX;
-            const currentY = e.touches[0].clientY;
-            
-            const deltaX = currentX - lastTouchX;
-            const deltaY = currentY - lastTouchY;
-            
-            if (Math.abs(deltaX) > touchThreshold || Math.abs(deltaY) > touchThreshold) {
-                // Determine primary direction
-                if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                    tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
-                } else {
-                    tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
-                }
-                
-                // Update last touch position
-                lastTouchX = currentX;
-                lastTouchY = currentY;
-            }
-        }, { passive: false });
-
-        canvas.addEventListener('touchend', () => {
-            touchStartX = null;
-            touchStartY = null;
-            lastTouchX = null;
-            lastTouchY = null;
-        });
-
-        // Add touch event listener to document for auto-pause
-        document.addEventListener('touchstart', (e) => {
-            if (!isPaused && game) {
-                // Check if touch is outside canvas and game controls
-                const touch = e.touches[0];
-                const canvasRect = canvas.getBoundingClientRect();
-                const controlsRect = document.getElementById('mobileControls').getBoundingClientRect();
-                
-                const isOutsideCanvas = touch.clientX < canvasRect.left || 
-                                      touch.clientX > canvasRect.right ||
-                                      touch.clientY < canvasRect.top || 
-                                      touch.clientY > canvasRect.bottom;
-                                      
-                const isOutsideControls = touch.clientX < controlsRect.left || 
-                                        touch.clientX > controlsRect.right ||
-                                        touch.clientY < controlsRect.top || 
-                                        touch.clientY > controlsRect.bottom;
-                
-                if (isOutsideCanvas && isOutsideControls) {
-                    togglePause();
-                }
-            }
-        });
-
-        function startSlowMotion() {
-            if (!isSlowMotion) {
-                isSlowMotion = true;
-                clearInterval(game);
-                gameSpeed = gameSpeed * 3; // Slow down 3x
-                game = setInterval(draw, gameSpeed);
-                
-                // Flash effect
-                let flashCount = 0;
-                const maxFlashes = 3;
-                const flashInterval = setInterval(() => {
-                    if (flashCount >= maxFlashes) {
-                        clearInterval(flashInterval);
-                        endGame();
-                        return;
-                    }
-                    
-                    document.getElementById('gameCanvas').classList.add('opacity-50');
-                    setTimeout(() => {
-                        document.getElementById('gameCanvas').classList.remove('opacity-50');
-                    }, 200);
-                    
-                    flashCount++;
-                }, 400);
-            }
-        }
-
-        function endGame() {
-            clearInterval(game);
-            alert("Game Over! Score: " + score);
-            document.getElementById("gameScreen").classList.add("hidden");
-            document.getElementById("menuScreen").classList.remove("hidden");
-            isSlowMotion = false;
-            gameSpeed = originalGameSpeed;
         }
 
         // Menu handling
@@ -378,6 +274,7 @@
             food = generateFood();
             isSlowMotion = false;
             gameSpeed = selectedSpeed;
+            isGameOver = false;
             
             if (game) clearInterval(game);
             game = setInterval(draw, gameSpeed);
@@ -385,7 +282,7 @@
         
         document.addEventListener("keydown", changeDirection);
         function changeDirection(event) {
-            if (isPaused) return;
+            if (isPaused || isGameOver) return;
             if (event.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
             if (event.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
             if (event.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
@@ -468,6 +365,8 @@
 
         // Joystick controls
         controlPad.addEventListener('touchstart', (e) => {
+            if (isGameOver) return;
+            
             e.preventDefault();
             const touch = e.touches[0];
             const rect = controlPad.getBoundingClientRect();
@@ -486,6 +385,8 @@
         });
 
         controlPad.addEventListener('touchmove', (e) => {
+            if (isGameOver) return;
+            
             e.preventDefault();
             if (!joystickActive) return;
 
@@ -535,17 +436,14 @@
         // Initialize control type
         function updateControlType(type) {
             controlType = type;
-            localStorage.setItem("snakeControlType", type);
             
             const joystickControl = document.getElementById("joystickControl");
             const arrowControls = document.getElementById("arrowControls");
-            const touchControl = document.getElementById("touchControl");
-            const touchArea = document.getElementById("touchArea");
+            const mobileControls = document.getElementById("mobileControls");
             
             // Hide all controls first
             joystickControl.classList.add("hidden");
             arrowControls.classList.add("hidden");
-            touchControl.classList.add("hidden");
             
             // Remove highlight from all buttons
             document.querySelectorAll('.control-type-btn').forEach(btn => {
@@ -560,60 +458,25 @@
                     joystickControl.classList.remove("hidden");
                     document.getElementById("joystickBtn").classList.add("ring-2", "ring-white");
                     description.textContent = "Use the joystick pad to control snake direction";
+                    mobileControls.classList.remove("hidden");
                     break;
                 case "arrows":
                     arrowControls.classList.remove("hidden");
                     document.getElementById("arrowsBtn").classList.add("ring-2", "ring-white");
                     description.textContent = "Use arrow buttons to control snake direction";
+                    mobileControls.classList.remove("hidden");
+                    break;
+                case "keyboard":
+                    document.getElementById("keyboardBtn").classList.add("ring-2", "ring-white");
+                    description.textContent = "Use keyboard arrow keys to control snake direction";
+                    mobileControls.classList.add("hidden");
                     break;
                 case "touch":
-                    touchControl.classList.remove("hidden");
                     document.getElementById("touchBtn").classList.add("ring-2", "ring-white");
-                    description.textContent = "Swipe anywhere on the screen to change direction";
-                    setupTouchControls();
+                    description.textContent = "Touch and swipe anywhere to control";
+                    mobileControls.classList.add("hidden");
                     break;
             }
-        }
-
-        function setupTouchControls() {
-            const touchArea = document.getElementById("touchArea");
-            let touchStartX = null;
-            let touchStartY = null;
-
-            touchArea.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-            });
-
-            touchArea.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                if (!touchStartX || !touchStartY || isPaused) return;
-
-                const currentX = e.touches[0].clientX;
-                const currentY = e.touches[0].clientY;
-                
-                const deltaX = currentX - touchStartX;
-                const deltaY = currentY - touchStartY;
-                
-                const minSwipeDistance = 30; // Minimum distance for a swipe
-
-                if (Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance) {
-                    if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                        tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
-                    } else {
-                        tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
-                    }
-                    // Reset start position
-                    touchStartX = currentX;
-                    touchStartY = currentY;
-                }
-            }, { passive: false });
-
-            touchArea.addEventListener('touchend', () => {
-                touchStartX = null;
-                touchStartY = null;
-            });
         }
 
         // Update difficulty level
@@ -634,7 +497,7 @@
         }
 
         // Initialize settings on load
-        updateControlType(controlType);
+        updateControlType("joystick"); // Force joystick mode on load
         updateDifficulty(selectedSpeed);
 
         // Settings button handlers
@@ -662,10 +525,90 @@
             });
         });
 
-        // Add touch controls for the entire game area when in touch-only mode
-        const gameScreen = document.getElementById("gameScreen");
-        
-        // Removed old touch event listeners
+        // Handle keyboard controls
+        document.addEventListener("keydown", (event) => {
+            if (controlType === "keyboard" && !isPaused && !isGameOver) {
+                if (event.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
+                if (event.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
+                if (event.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
+                if (event.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
+            }
+        });
+
+        // Handle touch controls for the entire document when in touch mode
+        document.addEventListener('touchstart', (e) => {
+            if (controlType === "touch" && !isGameOver) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (controlType === "touch" && !isPaused && !isGameOver) {
+                if (!touchStartX || !touchStartY) return;
+
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                
+                const deltaX = currentX - touchStartX;
+                const deltaY = currentY - touchStartY;
+                
+                if (Math.abs(deltaX) > touchThreshold || Math.abs(deltaY) > touchThreshold) {
+                    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                        tryChangeDirection(deltaX > 0 ? "RIGHT" : "LEFT");
+                    } else {
+                        tryChangeDirection(deltaY > 0 ? "DOWN" : "UP");
+                    }
+                    
+                    // Reset touch start position for next swipe
+                    touchStartX = currentX;
+                    touchStartY = currentY;
+                }
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchend', () => {
+            if (controlType === "touch") {
+                touchStartX = null;
+                touchStartY = null;
+            }
+        });
+
+        function startSlowMotion() {
+            if (!isSlowMotion) {
+                isSlowMotion = true;
+                clearInterval(game);
+                gameSpeed = gameSpeed * 3; // Slow down 3x
+                game = setInterval(draw, gameSpeed);
+                
+                // Flash effect
+                let flashCount = 0;
+                const maxFlashes = 3;
+                const flashInterval = setInterval(() => {
+                    if (flashCount >= maxFlashes) {
+                        clearInterval(flashInterval);
+                        endGame();
+                        return;
+                    }
+                    
+                    document.getElementById('gameCanvas').classList.add('opacity-50');
+                    setTimeout(() => {
+                        document.getElementById('gameCanvas').classList.remove('opacity-50');
+                    }, 200);
+                    
+                    flashCount++;
+                }, 400);
+            }
+        }
+
+        function endGame() {
+            clearInterval(game);
+            isGameOver = true;
+            document.getElementById("gameScreen").classList.add("hidden");
+            document.getElementById("menuScreen").classList.remove("hidden");
+            isSlowMotion = false;
+            gameSpeed = originalGameSpeed;
+        }
     </script>
 </body>
 </html>
